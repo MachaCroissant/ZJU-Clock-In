@@ -3,6 +3,9 @@
 # 打卡脚修改自ZJU-nCov-Hitcarder的开源代码，感谢这位同学开源的代码
 
 import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
+
 import json
 import re
 import datetime
@@ -12,7 +15,6 @@ import sys
 
 class DaKa(object):
     """Hit card class
-
     Attributes:
         username: (str) 浙大统一认证平台用户名（一般为学号）
         password: (str) 浙大统一认证平台密码
@@ -22,17 +24,25 @@ class DaKa(object):
         sess: (requests.Session) 统一的session
     """
 
+    headers = {
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36',
+    }
+
+    LOGIN_URL = "https://zjuam.zju.edu.cn/cas/login?service=https%3A%2F%2Fhealthreport.zju.edu.cn%2Fa_zju%2Fapi%2Fsso%2Findex%3Fredirect%3Dhttps%253A%252F%252Fhealthreport.zju.edu.cn%252Fncov%252Fwap%252Fdefault%252Findex"
+    BASE_URL = "https://healthreport.zju.edu.cn/ncov/wap/default/index"
+    SAVE_URL = "https://healthreport.zju.edu.cn/ncov/wap/default/save"
+
     def __init__(self, username, password):
         self.username = username
         self.password = password
-        self.login_url = "https://zjuam.zju.edu.cn/cas/login?service=https%3A%2F%2Fhealthreport.zju.edu.cn%2Fa_zju%2Fapi%2Fsso%2Findex%3Fredirect%3Dhttps%253A%252F%252Fhealthreport.zju.edu.cn%252Fncov%252Fwap%252Fdefault%252Findex"
-        self.base_url = "https://healthreport.zju.edu.cn/ncov/wap/default/index"
-        self.save_url = "https://healthreport.zju.edu.cn/ncov/wap/default/save"
+        # self.login_url = "https://zjuam.zju.edu.cn/cas/login?service=https%3A%2F%2Fhealthreport.zju.edu.cn%2Fa_zju%2Fapi%2Fsso%2Findex%3Fredirect%3Dhttps%253A%252F%252Fhealthreport.zju.edu.cn%252Fncov%252Fwap%252Fdefault%252Findex"
+        # self.base_url = "https://healthreport.zju.edu.cn/ncov/wap/default/index"
+        # self.save_url = "https://healthreport.zju.edu.cn/ncov/wap/default/save"
         self.sess = requests.Session()
 
     def login(self):
         """Login to ZJU platform"""
-        res = self.sess.get(self.login_url)
+        res = self.sess.get(self.LOGIN_URL)
         execution = re.search(
             'name="execution" value="(.*?)"', res.text).group(1)
         res = self.sess.get(
@@ -46,7 +56,7 @@ class DaKa(object):
             'execution': execution,
             '_eventId': 'submit'
         }
-        res = self.sess.post(url=self.login_url, data=data)
+        res = self.sess.post(url=self.LOGIN_URL, data=data)
 
         # check if login successfully
         if '统一身份认证' in res.content.decode():
@@ -55,7 +65,7 @@ class DaKa(object):
 
     def post(self):
         """Post the hitcard info"""
-        res = self.sess.post(self.save_url, data=self.info)
+        res = self.sess.post(self.SAVE_URL, data=self.info, headers=self.headers)
         return json.loads(res.text)
 
     def get_date(self):
@@ -66,9 +76,9 @@ class DaKa(object):
     def get_info(self, html=None):
         """Get hitcard info, which is the old info with updated new time."""
         if not html:
-            res = self.sess.get(self.base_url)
+            res = self.sess.get(self.BASE_URL, headers=self.headers)
             html = res.content.decode()
-
+            # print('html' + html)
         try:
             old_infos = re.findall(r'oldInfo: ({[^\n]+})', html)
             if len(old_infos) != 0:
@@ -134,7 +144,6 @@ class DecodeError(Exception):
 
 def main(username, password):
     """Hit card process
-
     Arguments:
         username: (str) 浙大统一认证平台用户名（一般为学号）
         password: (str) 浙大统一认证平台密码
@@ -161,7 +170,7 @@ def main(username, password):
         print('获取信息失败，请手动打卡，更多信息: ' + str(err))
         raise Exception
 
-    print(text='正在为您打卡打卡打卡')
+    print('正在为您打卡打卡打卡')
     try:
         res = dk.post()
         if str(res['e']) == '0':
@@ -174,7 +183,7 @@ def main(username, password):
 
 
 if __name__ == "__main__":
-    print(sys.argv)
+	print(sys.argv)
     username = sys.argv[1]
     password = sys.argv[2]
     try:
